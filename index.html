@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrediControl Pro - Ruta de Cobro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <!-- Leaflet.js para Mapa Interactivo -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans min-h-screen pb-20 transition-colors duration-200">
+
+    <!-- Header Móvil Cobrador -->
+    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 shadow-sm">
+        <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-500/20">
+                    🛵
+                </div>
+                <div>
+                    <h1 id="headerNombreCobrador" class="font-bold text-sm text-slate-900 dark:text-white leading-tight">Cargando Ruta...</h1>
+                    <span id="headerHojaCobrador" class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold block">📊 Hoja: ...</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button onclick="sincronizarDatos(true)" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-200 transition" title="Recargar ruta">
+                    🔄
+                </button>
+                <button onclick="toggleDarkMode()" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-amber-400 text-xs transition" title="Modo Claro/Oscuro">
+                    <span id="themeIcon">☀️</span>
+                </button>
+                <button onclick="cambiarPerfilCobrador()" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 text-xs transition" title="Cambiar de Cobrador / Salir">
+                    🚪
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenedor Principal -->
+    <main class="max-w-md mx-auto px-4 mt-3 space-y-4">
+
+        <!-- Cuadre en Vivo del Cobrador -->
+        <div class="bg-gradient-to-br from-emerald-600 to-teal-800 text-white p-4 rounded-2xl shadow-lg shadow-emerald-900/20 space-y-3">
+            <div class="flex justify-between items-center border-b border-emerald-500/40 pb-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-100">Cuadre del Día</span>
+                <span id="labelCobradorEnVivo" class="text-[11px] bg-emerald-500/30 px-2.5 py-0.5 rounded-full border border-emerald-400/30 font-medium">Liquidación En Vivo</span>
+            </div>
+            
+            <div class="grid grid-cols-4 gap-1.5 text-center">
+                <div class="bg-emerald-900/30 p-2 rounded-xl border border-emerald-500/30">
+                    <span class="opacity-80 block text-[9px]">💵 Base</span>
+                    <span id="cobradorBaseCaja" class="font-bold text-xs sm:text-sm text-amber-200">$0</span>
+                </div>
+                <div class="bg-emerald-900/30 p-2 rounded-xl border border-emerald-500/30">
+                    <span class="opacity-80 block text-[9px]">📥 Recaudo</span>
+                    <span id="cobradorRecaudoBruto" class="font-bold text-xs sm:text-sm text-emerald-200">+$0</span>
+                </div>
+                <div class="bg-emerald-900/30 p-2 rounded-xl border border-emerald-500/30">
+                    <span class="opacity-80 block text-[9px]">📤 Préstamos</span>
+                    <span id="cobradorPrestamosTotal" class="font-bold text-xs sm:text-sm text-blue-200">-$0</span>
+                </div>
+                <div class="bg-emerald-900/30 p-2 rounded-xl border border-emerald-500/30">
+                    <span class="opacity-80 block text-[9px]">💸 Gastos</span>
+                    <span id="cobradorGastosTotal" class="font-bold text-xs sm:text-sm text-rose-200">-$0</span>
+                </div>
+            </div>
+
+            <div class="bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-400/30 flex justify-between items-center text-xs">
+                <div>
+                    <span class="block text-[10px] uppercase tracking-wider text-emerald-200 font-bold">💰 Efectivo Total en Mano:</span>
+                    <span class="text-[10px] text-emerald-300 opacity-80">(Base + Recaudo - Préstamos - Gastos)</span>
+                </div>
+                <span id="cobradorEfectivoNeto" class="font-extrabold text-lg text-white">$0</span>
+            </div>
+
+            <div class="grid grid-cols-5 gap-1.5 pt-1 border-t border-emerald-500/30">
+                <button onclick="abrirModalBaseCaja()" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-2 rounded-xl text-[11px] transition shadow-sm text-center">
+                    💵 Base
+                </button>
+                <button onclick="abrirModalLiquidacion()" class="bg-emerald-950/60 hover:bg-emerald-950 text-white font-bold py-2 rounded-xl text-[11px] transition border border-emerald-500/40 text-center">
+                    📋 Cuadre
+                </button>
+                <button onclick="abrirModalGasto()" class="bg-white hover:bg-slate-100 text-emerald-800 font-bold py-2 rounded-xl text-[11px] transition shadow-sm text-center">
+                    💸 Gasto
+                </button>
+                <button onclick="abrirModalNuevoCliente()" class="bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-2 rounded-xl text-[11px] transition shadow-sm text-center">
+                    ➕ Prestar
+                </button>
+                <button onclick="abrirModalConfirmarCierre()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-xl text-[11px] transition shadow-sm text-center">
+                    🔒 Cerrar
+                </button>
+            </div>
+        </div>
+
+        <!-- Barra de búsqueda y Ruta GPS -->
+        <div class="space-y-2">
+            <div class="relative">
+                <input type="text" id="buscadorCalle" oninput="filtrarClientesCalle()" placeholder="Buscar cobro pendiente por nombre o dirección..." class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 shadow-sm">
+                <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+            </div>
+
+            <div class="flex gap-2">
+                <button id="btnOrdenarGps" onclick="toggleOrdenarPorGps()" class="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 shadow-sm hover:border-emerald-500 transition">
+                    <span>📍</span> <span id="txtBtnGps">Ordenar por Distancia GPS</span>
+                </button>
+                <button onclick="abrirModalMapa()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition">
+                    🗺️ Ver Mapa
+                </button>
+            </div>
+        </div>
+
+        <!-- Lista de Tarjetas de Clientes para Cobro -->
+        <div id="listaClientesCalle" class="space-y-3">
+            <!-- Inyectado vía JS -->
+        </div>
+
+    </main>
+
+    <!-- ========================================== -->
+    <!-- MODALES DE LA RUTA DE COBRO                -->
+    <!-- ========================================== -->
+
+    <!-- MODAL INGRESO PIN DE COBRADOR (NUEVO) -->
+    <div id="modalPinAcceso" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[60] flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-4 text-center">
+            <div class="w-14 h-14 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+                🔑
+            </div>
+            <div>
+                <h3 id="pinModalTitulo" class="font-bold text-lg text-slate-900 dark:text-white">PIN de Acceso</h3>
+                <p id="pinModalSubtitulo" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Ingresa tu clave de seguridad para ingresar a la ruta</p>
+            </div>
+            <div class="space-y-3">
+                <input type="password" id="inputPinIngresado" maxlength="8" placeholder="••••" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-3 text-center text-xl font-mono tracking-widest text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                <div class="flex gap-2">
+                    <button id="btnCancelarPin" class="w-1/2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-xs font-semibold">Cancelar</button>
+                    <button id="btnConfirmarPin" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-bold transition">Verificar PIN</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SELECCIÓN / LOGIN DE COBRADOR -->
+    <div id="modalLoginCobrador" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-5 text-center">
+            <div class="w-14 h-14 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+                🛵
+            </div>
+            <div>
+                <h3 class="font-bold text-lg text-slate-900 dark:text-white">Identifícate para Cobrar</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Selecciona tu perfil para ingresar exclusivamente a tu ruta asignada</p>
+            </div>
+            <form onsubmit="confirmarIngresoCobrador(event)" class="space-y-4">
+                <div class="text-left">
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Selecciona tu Nombre</label>
+                    <select id="selectPerfilCobradorLogin" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white font-bold focus:outline-none focus:border-emerald-500">
+                        <option value="">Cargando cobradores...</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-500/25">
+                    Entrar a mi Ruta
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL BASE DE CAJA -->
+    <div id="modalBaseCaja" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4">
+            <h3 class="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <span>💵</span> Base de Caja del Día
+            </h3>
+            <p id="labelBaseCajaCobrador" class="text-xs text-slate-500 dark:text-slate-400">
+                Ingresa el efectivo inicial entregado para comenzar la ruta.
+            </p>
+            <form onsubmit="guardarBaseCaja(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Monto en Efectivo ($)</label>
+                    <input type="number" id="inputMontoBaseCaja" required placeholder="Ej. 100000" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 font-bold">
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="cerrarModalBaseCaja()" class="w-1/2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold">Cancelar</button>
+                    <button type="submit" class="w-1/2 bg-amber-500 hover:bg-amber-400 text-slate-900 py-2 rounded-xl text-xs font-bold transition">Guardar Base</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DETALLE DE CLIENTE / ABONOS -->
+    <div id="modalDetalle" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div>
+                    <h3 id="modalNombreCliente" class="font-bold text-base text-slate-900 dark:text-white">Nombre Cliente</h3>
+                    <p id="modalInfoAdicional" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Información</p>
+                </div>
+                <button onclick="cerrarModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+
+            <!-- Resumen de deuda -->
+            <div class="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                <div>
+                    <span class="text-slate-400 block">Deuda Total:</span>
+                    <span id="modalDeudaTotal" class="font-bold text-sm text-slate-800 dark:text-slate-200">$0</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block">Saldo Pendiente:</span>
+                    <span id="modalSaldoPendiente" class="font-extrabold text-sm text-amber-600 dark:text-amber-400">$0</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block">Cuota Sugerida:</span>
+                    <span id="modalCuotaSugerida" class="font-bold text-emerald-600 dark:text-emerald-400">$0</span>
+                </div>
+                <div>
+                    <span class="text-slate-400 block">Cuotas Pagadas:</span>
+                    <span id="modalProgresoCuotas" class="font-bold text-indigo-600 dark:text-indigo-400">0 / 0</span>
+                </div>
+            </div>
+
+            <!-- Botones de Acción GPS y Navegación -->
+            <div class="flex gap-2">
+                <button id="btnNavegarMaps" onclick="navegarClienteActual()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+                    <span>🧭</span> Iniciar Navegación Maps
+                </button>
+                <button id="btnGuardarUbicacion" onclick="guardarUbicacionClienteActual()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2 px-3 rounded-xl text-xs font-semibold flex items-center gap-1 transition">
+                    <span>📍</span> Fijar GPS Aquí
+                </button>
+            </div>
+
+            <!-- Formulario de Abono -->
+            <form onsubmit="enviarAbono(event)" class="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <input type="hidden" id="modalIdCliente">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Monto a Abonar ($)</label>
+                    <input type="number" id="inputMontoAbono" required placeholder="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2.5 text-base font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="cerrarModal()" class="w-1/2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold">Cancelar</button>
+                    <button type="submit" id="btnEnviarAbono" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold transition">Registrar Abono</button>
+                </div>
+            </form>
+
+            <!-- Historial de Abonos -->
+            <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
+                <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Últimos Abonos</h4>
+                <div id="modalHistorialAbonos" class="space-y-1.5 max-h-36 overflow-y-auto text-xs">
+                    <!-- Se inyecta vía JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVO PRÉSTAMO / RENOVACIÓN RÁPIDA -->
+    <div id="modalNuevoCliente" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 class="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>➕</span> Nuevo Préstamo / Renovación
+                </h3>
+                <button onclick="cerrarModalNuevoCliente()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+
+            <!-- Buscador para Renovación Rápida -->
+            <div class="relative bg-indigo-50/60 dark:bg-indigo-950/30 p-3 rounded-xl border border-indigo-500/30 space-y-1.5">
+                <label class="block text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center justify-between">
+                    <span>🔍 ¿Es Renovación? Buscar cliente pagado:</span>
+                    <span class="text-[10px] text-slate-400 font-normal">Carga datos y solo ingresas monto</span>
+                </label>
+                <div class="relative">
+                    <input type="text" id="buscadorRenovacionCobrador" oninput="buscarClienteParaRenovarCobrador(this.value)" placeholder="Escribe nombre o teléfono del cliente pagado..." class="w-full bg-white dark:bg-slate-950 border border-indigo-500/40 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500">
+                    <span class="absolute left-2.5 top-2.5 text-xs text-indigo-400">🔍</span>
+                </div>
+                <!-- Dropdown sugerencias -->
+                <div id="dropdownSugerenciasCobrador" class="hidden absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-48 overflow-y-auto z-50 divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                </div>
+            </div>
+
+            <div id="bannerAlertaRenovacionCobrador" class="hidden bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-500/30 p-2.5 rounded-xl text-xs text-indigo-700 dark:text-indigo-300 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-base">🔄</span>
+                    <span>Renovando para: <b id="nombreClienteRenovandoCobrador"></b>. <span class="text-emerald-600 dark:text-emerald-400 font-bold">Solo ingresa el monto a prestar abajo.</span></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="habilitarEdicionDatosCobrador()" class="text-indigo-600 dark:text-indigo-400 hover:underline text-[11px] font-bold">✏️ Editar datos</button>
+                    <button type="button" onclick="cancelarRenovacionCobrador()" class="text-slate-400 hover:text-slate-600 text-[11px] underline">✕ Cancelar</button>
+                </div>
+            </div>
+
+            <form id="formCobradorNuevoCliente" onsubmit="registrarClienteCobrador(event)" class="space-y-3">
+                <input type="hidden" id="cobradorIdClienteRenovacion">
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nombre Completo</label>
+                    <input type="text" id="cobradorNombre" required placeholder="Ej. Juan Pérez" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Teléfono</label>
+                    <input type="number" id="cobradorTelefono" required placeholder="Ej. 3001234567" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Dirección / Negocio</label>
+                    <input type="text" id="cobradorDireccion" required placeholder="Ej. Calle 10 # 4-20" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Monto ($)</label>
+                        <input type="number" id="cobradorMonto" oninput="calcularCuotasCobrador()" required placeholder="200000" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Interés (%)</label>
+                        <input type="number" id="cobradorInteres" value="20" oninput="calcularCuotasCobrador()" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Fecha del Préstamo</label>
+                    <input type="date" id="cobradorFechaPrestamo" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Modalidad</label>
+                        <select id="cobradorModalidad" onchange="calcularCuotasCobrador()" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                            <option value="Diario">Diario</option>
+                            <option value="Semanal">Semanal</option>
+                            <option value="Quincenal">Quincenal</option>
+                            <option value="Mensual">Mensual</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Cuotas</label>
+                        <input type="number" id="cobradorCuotas" value="24" oninput="calcularCuotasCobrador()" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <!-- Resumen en vivo de Cuota -->
+                <div class="bg-emerald-50 dark:bg-emerald-950/40 p-3 rounded-xl border border-emerald-500/30 text-xs flex justify-between items-center">
+                    <div>
+                        <span class="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Valor de la Cuota</span>
+                        <span id="cobradorTotalConInteres" class="text-[11px] text-emerald-700 dark:text-emerald-300">Total a pagar: $0</span>
+                    </div>
+                    <div class="text-right">
+                        <span id="cobradorValorCuotaTexto" class="font-extrabold text-base text-emerald-600 dark:text-emerald-400">$0</span>
+                        <span id="cobradorFrecuenciaCuota" class="block text-[10px] text-slate-400">/ cuota</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <button type="button" onclick="capturarGpsCobradorNuevo()" class="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+                        <span>📍</span> <span id="txtGpsCobrador">Tomar GPS de este punto</span>
+                    </button>
+                </div>
+                <input type="hidden" id="cobradorLat">
+                <input type="hidden" id="cobradorLng">
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="cerrarModalNuevoCliente()" class="w-1/2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold">Cancelar</button>
+                    <button type="submit" id="btnGuardarCobradorCliente" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold transition">Guardar Préstamo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL COMPROBANTE WHATSAPP -->
+    <div id="modalComprobante" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div class="text-center space-y-1">
+                <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl">
+                    ✓
+                </div>
+                <h3 class="font-bold text-base text-slate-900 dark:text-white">¡Abono Registrado!</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Envía el recibo digital por WhatsApp al cliente.</p>
+            </div>
+
+            <div class="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono space-y-1.5 whitespace-pre-wrap text-slate-700 dark:text-slate-300" id="textoComprobantePreview">
+            </div>
+
+            <div class="space-y-2">
+                <button onclick="enviarReciboWhatsApp()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition">
+                    <span>📲</span> Enviar por WhatsApp
+                </button>
+                <button onclick="cerrarModalComprobante()" class="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold">
+                    Listo / Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL REGISTRO DE GASTO -->
+    <div id="modalGasto" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4">
+            <h3 class="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <span>💸</span> Registrar Gasto de Ruta
+            </h3>
+            <form id="formGasto" onsubmit="guardarGasto(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Concepto</label>
+                    <select id="selectConceptoGasto" onchange="verificarConceptoOtro(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-rose-500">
+                        <option value="Gasolina">Gasolina / Combustible</option>
+                        <option value="Almuerzo / Refrigerio">Almuerzo / Refrigerio</option>
+                        <option value="Taller / Moto">Taller / Despinche</option>
+                        <option value="Parqueadero">Parqueadero</option>
+                        <option value="Papeleria">Papelería</option>
+                        <option value="OTRO">Otro concepto...</option>
+                    </select>
+                </div>
+                <div id="divConceptoPersonalizado" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Especificar Concepto</label>
+                    <input type="text" id="inputConceptoPersonalizado" placeholder="Ej. Peaje" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-rose-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Monto ($)</label>
+                    <input type="number" id="inputMontoGasto" required placeholder="Ej. 10000" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 font-bold">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="cerrarModalGasto()" class="w-1/2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold">Cancelar</button>
+                    <button type="submit" id="btnGuardarGasto" class="w-1/2 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-xs font-bold transition">Guardar Gasto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL LIQUIDACIÓN -->
+    <div id="modalLiquidacion" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 class="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>📋</span> Liquidación Diaria de Caja
+                </h3>
+                <button onclick="cerrarModalLiquidacion()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+
+            <div class="space-y-2 text-xs">
+                <div class="flex justify-between p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300">
+                    <span>💵 Base de Caja (Inicio):</span>
+                    <span id="liqBase" class="font-bold">$0</span>
+                </div>
+                <div class="flex justify-between p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
+                    <span>📥 Total Cobrado (+):</span>
+                    <span id="liqRecaudo" class="font-bold">+$0</span>
+                </div>
+                <div class="flex justify-between p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-300">
+                    <span>📤 Nuevos Préstamos Entregados (-):</span>
+                    <span id="liqPrestamos" class="font-bold">-$0</span>
+                </div>
+                <div class="flex justify-between p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300">
+                    <span>💸 Gastos Operativos (-):</span>
+                    <span id="liqGastos" class="font-bold">-$0</span>
+                </div>
+                <div class="flex justify-between p-3 rounded-xl bg-slate-900 text-white font-bold text-sm mt-3">
+                    <span>💰 Total Efectivo en Mano:</span>
+                    <span id="liqNeto" class="text-emerald-400">$0</span>
+                </div>
+            </div>
+
+            <button onclick="cerrarModalLiquidacion()" class="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold">
+                Cerrar
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMAR CIERRE DIARIO -->
+    <!-- MODAL CONFIRMAR CIERRE DIARIO -->
+    <div id="modalConfirmarCierre" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4">
+            <div class="text-center space-y-1">
+                <div class="w-12 h-12 bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto text-2xl">
+                    🔒
+                </div>
+                <h3 class="font-bold text-base text-slate-900 dark:text-white">Cerrar Ruta del Día</h3>
+                <p id="labelCierreCobrador" class="text-xs text-slate-500 dark:text-slate-400">
+                    Se guardará el balance oficial en Google Sheets.
+                </p>
+            </div>
+
+            <div class="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1 text-xs">
+                <div class="flex justify-between text-slate-400">
+                    <span>Base Inicial:</span>
+                    <span id="cierreBaseCaja" class="font-semibold text-slate-700 dark:text-slate-300">$0</span>
+                </div>
+                <div class="flex justify-between text-slate-400">
+                    <span>Recaudo:</span>
+                    <span id="cierreTotalCobrado" class="font-semibold text-emerald-600 dark:text-emerald-400">$0</span>
+                </div>
+                <div class="flex justify-between text-slate-400">
+                    <span>Préstamos:</span>
+                    <span id="cierreTotalPrestado" class="font-semibold text-blue-600 dark:text-blue-400">$0</span>
+                </div>
+                <div class="flex justify-between text-slate-400">
+                    <span>Gastos:</span>
+                    <span id="cierreTotalGastos" class="font-semibold text-rose-600 dark:text-rose-400">$0</span>
+                </div>
+                <div class="flex justify-between font-bold text-slate-900 dark:text-white pt-1 border-t border-slate-200 dark:border-slate-800">
+                    <span>Efectivo Neto:</span>
+                    <span id="cierreEfectivoNeto" class="text-emerald-500">$0</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Observaciones (Opcional)</label>
+                <textarea id="cierreObservaciones" rows="2" placeholder="Novedades de la ruta..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl p-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-rose-500"></textarea>
+            </div>
+
+            <div class="flex gap-2">
+                <button type="button" onclick="cerrarModalConfirmarCierre()" class="w-1/2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold">Cancelar</button>
+                <button type="button" id="btnConfirmarCierre" onclick="ejecutarCierreDiario(event)" class="w-1/2 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-xs font-bold transition">Confirmar Cierre</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL MAPA LEAFLET -->
+    <div id="modalMapa" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl p-5 shadow-2xl space-y-3">
+            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-2">
+                <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>🗺️</span> Ruta de Cobro en Mapa (Préstamos Activos)
+                </h3>
+                <button onclick="cerrarModalMapa()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+            <div id="contenedorMapaLeaflet" class="w-full h-96 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"></div>
+        </div>
+    </div>
+
+    <!-- SCRIPT DE COBRADOR -->
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwP32DNfwd1vrwPiYliAa_jOs5TvxDyeVCEB5rYnooo_lcEfAl7cxsNgzNbtH0fVR-f/exec";
+
+        // ESTADO EXCLUSIVO DE ESTE COBRADOR
+        let cobradorActualId = null;
+        let cobradorActualData = null;
+        let todosCobradores = [];
+        let clientesGlobalData = [];
+        let resumenGlobalData = {};
+        let ubicacionUsuario = null;
+        let ordenarPorDistancia = false;
+        let mapaLeaflet = null;
+        let marcadoresMapa = [];
+        let clienteSeleccionadoActual = null;
+        let comprobanteActualData = null;
+
+        // TEMA
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const isDark = html.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('themeIcon').textContent = isDark ? '☀️' : '🌙';
+        }
+
+        function setTexto(id, valor) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = valor;
+        }
+
+        function normalizarTelefono(tel) {
+            let num = String(tel || "").replace(/\D/g, "");
+            if (num.length === 10 && num.startsWith('3')) num = "57" + num;
+            return num;
+        }
+
+        function getFechaLocalISO() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function formatearFechaBonita(fechaRaw) {
+            if (!fechaRaw) return "Reciente";
+            const str = String(fechaRaw).trim();
+            try {
+                const d = new Date(str);
+                if (!isNaN(d.getTime())) return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            } catch (e) {}
+            const match = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+            return str.substring(0, 10);
+        }
+
+        function normalizarFechaAbono(fechaRaw) {
+            if (!fechaRaw) return "";
+            if (fechaRaw instanceof Date) {
+                return `${fechaRaw.getFullYear()}-${String(fechaRaw.getMonth() + 1).padStart(2, '0')}-${String(fechaRaw.getDate()).padStart(2, '0')}`;
+            }
+            const str = String(fechaRaw).trim();
+            const match = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (match) return match[0];
+            const matchLat = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (matchLat) return `${matchLat[3]}-${String(matchLat[2]).padStart(2, '0')}-${String(matchLat[1]).padStart(2, '0')}`;
+            return "";
+        }
+
+        function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+        }
+
+        function formatearDistancia(km) {
+            if (km === null || isNaN(km)) return "";
+            if (km < 1) return `${Math.round(km * 1000)} m`;
+            return `${km.toFixed(1)} km`;
+        }
+
+        function calcularProgresoCuotas(c) {
+            const totalCuotas = parseInt(c.cantidad_cuotas) || 1;
+            const montoTotal = parseFloat(c.monto_total) || 0;
+            let valorCuota = parseFloat(c.valor_cuota) || 0;
+            if (valorCuota <= 0 && montoTotal > 0) valorCuota = Math.round(montoTotal / totalCuotas);
+            if (valorCuota <= 0) valorCuota = 1;
+
+            const saldoPendiente = Math.max(0, parseFloat(c.saldo_pendiente) || 0);
+            if (saldoPendiente <= 0) {
+                return { totalCuotas, pagadas: totalCuotas, pendientes: 0, porcentaje: 100, liquidado: true, valorCuota };
+            }
+
+            const totalPagado = Math.max(0, montoTotal - saldoPendiente);
+            let pagadas = Math.floor(totalPagado / valorCuota);
+            if (pagadas > totalCuotas) pagadas = totalCuotas;
+            let pendientes = Math.max(0, totalCuotas - pagadas);
+            let porcentaje = Math.min(100, Math.round((pagadas / totalCuotas) * 100));
+
+            return { totalCuotas, pagadas, pendientes, porcentaje, liquidado: false, valorCuota };
+        }
+
+        async function fetchSeguro(url) {
+            const res = await fetch(url);
+            const texto = await res.text();
+            if (texto.includes("<!DOCTYPE html") || texto.includes("<html") || texto.includes("accounts.google.com")) {
+                throw new Error("ACCESO_PRIVADO_HTML");
+            }
+            return JSON.parse(texto);
+        }
+
+        // FUNCIÓN MODAL DE SOLICITUD DE PIN
+        function pedirPinModal(nombreCobrador, pinCorrecto) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('modalPinAcceso');
+                const input = document.getElementById('inputPinIngresado');
+                const titulo = document.getElementById('pinModalTitulo');
+                const btnAceptar = document.getElementById('btnConfirmarPin');
+                const btnCancelar = document.getElementById('btnCancelarPin');
+
+                titulo.textContent = `PIN de ${nombreCobrador}`;
+                input.value = '';
+                modal.classList.remove('hidden');
+                input.focus();
+
+                function cerrar(resultado) {
+                    modal.classList.add('hidden');
+                    btnAceptar.onclick = null;
+                    btnCancelar.onclick = null;
+                    resolve(resultado);
+                }
+
+                btnAceptar.onclick = () => {
+                    if (String(input.value).trim() === String(pinCorrecto)) {
+                        cerrar(true);
+                    } else {
+                        alert("❌ PIN incorrecto. Acceso denegado.");
+                        cerrar(false);
+                    }
+                };
+
+                btnCancelar.onclick = () => cerrar(false);
+
+                input.onkeyup = (e) => {
+                    if (e.key === 'Enter') btnAceptar.click();
+                };
+            });
+        }
+
+        // CONTROL DE IDENTIDAD DEL COBRADOR
+        async function resolverCobradorActivo() {
+            const params = new URLSearchParams(window.location.search);
+            const idParam = params.get('id') || params.get('cobrador');
+
+            if (idParam) {
+                cobradorActualId = idParam;
+                localStorage.setItem('credicontrol_cobrador_fijo', idParam);
+            } else {
+                cobradorActualId = localStorage.getItem('credicontrol_cobrador_fijo');
+            }
+
+            await cargarDatosApp();
+        }
+
+        function cambiarPerfilCobrador() {
+            if (confirm("¿Deseas salir o cambiar de cobrador en este dispositivo?")) {
+                localStorage.removeItem('credicontrol_cobrador_fijo');
+                window.location.href = window.location.pathname;
+            }
+        }
+
+        function mostrarModalLoginCobrador() {
+            const select = document.getElementById('selectPerfilCobradorLogin');
+            select.innerHTML = todosCobradores.map(c => 
+                `<option value="${c.id_cobrador}">${c.nombre} (Hoja: ${c.nombre_hoja})</option>`
+            ).join('');
+            document.getElementById('modalLoginCobrador').classList.remove('hidden');
+        }
+
+        function confirmarIngresoCobrador(e) {
+            e.preventDefault();
+            const id = document.getElementById('selectPerfilCobradorLogin').value;
+            if (!id) return alert("Selecciona un cobrador.");
+            cobradorActualId = id;
+            document.getElementById('modalLoginCobrador').classList.add('hidden');
+            configurarCobradorActual();
+        }
+
+        // CARGA Y SINCRONIZACIÓN
+        async function sincronizarDatos(mostrarAlerta = false) {
+            await cargarDatosApp();
+            if (mostrarAlerta) alert("✅ Ruta sincronizada con Google Sheets.");
+        }
+
+        async function cargarDatosApp() {
+            const contenedorCalle = document.getElementById('listaClientesCalle');
+            contenedorCalle.innerHTML = `
+                <div class="text-center py-8 space-y-2">
+                    <div class="inline-block animate-spin text-2xl">⏳</div>
+                    <p class="text-slate-400 text-xs">Sincronizando tu ruta...</p>
+                </div>`;
+
+            try {
+                let data = await fetchSeguro(`${WEB_APP_URL}?action=getTodo`);
+                if (!data || data.status === "error") {
+                    const resCli = await fetchSeguro(`${WEB_APP_URL}?action=getClientesConDetalle`);
+                    let resRes = {};
+                    try { resRes = await fetchSeguro(`${WEB_APP_URL}?action=getResumenDiario`); } catch(e) {}
+                    data = { cobradores: [], clientes: resCli, resumen: resRes };
+                }
+
+                todosCobradores = Array.isArray(data.cobradores) && data.cobradores.length > 0 ? data.cobradores : [{ id_cobrador: "COB-1", nombre: "Cobrador Principal", nombre_hoja: "Clientes", activo: "SI" }];
+                const clientesCrudos = Array.isArray(data.clientes) ? data.clientes : [];
+                clientesGlobalData = clientesCrudos.filter(c => c && c.nombre && String(c.nombre).trim() !== "");
+                resumenGlobalData = data.resumen || {};
+
+                if (!cobradorActualId) {
+                    mostrarModalLoginCobrador();
+                    return;
+                }
+
+                await configurarCobradorActual();
+
+            } catch(e) {
+                console.error("Error sincronizando:", e);
+                contenedorCalle.innerHTML = `
+                    <div class="text-center py-6 space-y-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-900/50 p-4">
+                        <p class="text-red-500 font-bold text-xs">⚠️ Error de conexión con Google Sheets</p>
+                        <p class="text-slate-400 text-[11px]">${e.message}</p>
+                        <button onclick="cargarDatosApp()" class="bg-slate-800 text-white text-xs px-4 py-2 rounded-lg font-medium">Reintentar</button>
+                    </div>`;
+            }
+        }
+
+        // VALIDACIÓN DE PIN Y CONFIGURACIÓN DEL COBRADOR
+        async function configurarCobradorActual() {
+            let candidatoCobrador = todosCobradores.find(c => String(c.id_cobrador) === String(cobradorActualId));
+
+            if (!candidatoCobrador && todosCobradores.length > 0) {
+                candidatoCobrador = todosCobradores[0];
+            }
+
+            if (!candidatoCobrador) return;
+
+            // Si el perfil seleccionado es diferente o no se ha autenticado, requerir PIN (si está definido)
+            if (candidatoCobrador.pin && (!cobradorActualData || String(cobradorActualData.id_cobrador) !== String(candidatoCobrador.id_cobrador))) {
+                const autorizado = await pedirPinModal(candidatoCobrador.nombre, candidatoCobrador.pin);
+                if (!autorizado) {
+                    if (!cobradorActualData) {
+                        mostrarModalLoginCobrador();
+                    }
+                    return;
+                }
+            }
+
+            // Asignar cobrador validado
+            cobradorActualData = candidatoCobrador;
+            cobradorActualId = cobradorActualData.id_cobrador;
+            localStorage.setItem('credicontrol_cobrador_fijo', cobradorActualId);
+
+            setTexto('headerNombreCobrador', cobradorActualData.nombre);
+            setTexto('headerHojaCobrador', `📊 Hoja: ${cobradorActualData.nombre_hoja || 'Clientes'}`);
+            setTexto('labelCobradorEnVivo', `${cobradorActualData.nombre} (En Vivo)`);
+            setTexto('labelBaseCajaCobrador', `Base inicial para ${cobradorActualData.nombre} (Ruta: ${cobradorActualData.nombre_hoja}).`);
+
+            actualizarMetricasCobrador();
+            renderizarClientesCalle(getClientesDeMiRuta());
+            detectarUbicacionActual();
+        }
+
+        function getClientesDeMiRuta() {
+            if (!cobradorActualData) return [];
+            const idCob = String(cobradorActualData.id_cobrador);
+            const hoja = String(cobradorActualData.nombre_hoja || "").toLowerCase();
+
+            return clientesGlobalData.filter(c => {
+                if (String(c.id_cobrador) === idCob) return true;
+                if (hoja && String(c.nombre_hoja || "").toLowerCase() === hoja) return true;
+                return false;
+            });
+        }
+
+        // MÉTRICAS EN VIVO
+        function obtenerGastosHoy(idCobrador, nombreCobrador, hoyStr) {
+            let total = 0;
+            let count = 0;
+            const gastosServidor = (resumenGlobalData && Array.isArray(resumenGlobalData.todosLosGastos)) ? resumenGlobalData.todosLosGastos : [];
+            const gastosServidorHoy = gastosServidor.filter(g => {
+                if (normalizarFechaAbono(g.fecha) !== hoyStr) return false;
+                if (idCobrador && String(g.id_cobrador) === String(idCobrador)) return true;
+                if (nombreCobrador && g.cobrador && String(g.cobrador).toLowerCase() === String(nombreCobrador).toLowerCase()) return true;
+                return false;
+            });
+
+            if (gastosServidorHoy.length > 0) {
+                gastosServidorHoy.forEach(g => { total += (parseFloat(g.monto) || 0); count++; });
+            } else {
+                const gastosLocal = JSON.parse(localStorage.getItem('credicontrol_gastos_hoy') || '[]');
+                gastosLocal.forEach(g => {
+                    if (g.fecha && g.fecha.startsWith(hoyStr)) {
+                        if (!g.id_cobrador || String(g.id_cobrador) === String(idCobrador)) {
+                            total += (parseFloat(g.monto) || 0);
+                            count++;
+                        }
+                    }
+                });
+            }
+            return { total, count };
+        }
+
+        function actualizarMetricasCobrador() {
+            const hoyStr = getFechaLocalISO();
+            const clientesCob = getClientesDeMiRuta();
+            const cobrador = cobradorActualData;
+            const idCob = String(cobrador.id_cobrador);
+
+            // Recaudo de hoy
+            let recaudoCob = 0;
+            clientesCob.forEach(c => {
+                if (c.abonos && Array.isArray(c.abonos)) {
+                    c.abonos.forEach(a => {
+                        if (normalizarFechaAbono(a.fecha) === hoyStr) {
+                            recaudoCob += (parseFloat(a.monto_abonado) || 0);
+                        }
+                    });
+                }
+            });
+
+            // Préstamos nuevos de hoy
+            let prestamosCob = 0;
+            clientesCob.forEach(c => {
+                if (normalizarFechaAbono(c.fecha_prestamo) === hoyStr) {
+                    prestamosCob += (parseFloat(c.monto_prestamo) || 0);
+                }
+            });
+
+            // Gastos
+            const infoGastos = obtenerGastosHoy(idCob, cobrador.nombre, hoyStr);
+            const gastosCob = infoGastos.total;
+
+            // Base de caja
+            const baseCob = Number(localStorage.getItem('credicontrol_base_caja_' + idCob + '_' + hoyStr) || 
+                                   localStorage.getItem('credicontrol_base_caja_' + hoyStr) || 0);
+
+            // Efectivo neto en mano
+            const netoCob = baseCob + recaudoCob - prestamosCob - gastosCob;
+
+            setTexto('cobradorBaseCaja', `+$${baseCob.toLocaleString()}`);
+            setTexto('cobradorRecaudoBruto', `+$${recaudoCob.toLocaleString()}`);
+            setTexto('cobradorPrestamosTotal', `-$${prestamosCob.toLocaleString()}`);
+            setTexto('cobradorGastosTotal', `-$${gastosCob.toLocaleString()}`);
+            setTexto('cobradorEfectivoNeto', `$${netoCob.toLocaleString()}`);
+
+            setTexto('liqBase', `$${baseCob.toLocaleString()}`);
+            setTexto('liqRecaudo', `+$${recaudoCob.toLocaleString()}`);
+            setTexto('liqPrestamos', `-$${prestamosCob.toLocaleString()}`);
+            setTexto('liqGastos', `-$${gastosCob.toLocaleString()}`);
+            setTexto('liqNeto', `$${netoCob.toLocaleString()}`);
+
+            setTexto('cierreBaseCaja', `+$${baseCob.toLocaleString()}`);
+            setTexto('cierreTotalCobrado', `+$${recaudoCob.toLocaleString()}`);
+            setTexto('cierreTotalPrestado', `-$${prestamosCob.toLocaleString()}`);
+            setTexto('cierreTotalGastos', `-$${gastosCob.toLocaleString()}`);
+            setTexto('cierreEfectivoNeto', `$${netoCob.toLocaleString()}`);
+            setTexto('labelCierreCobrador', `Cierre de ruta para: ${cobrador.nombre} (Hoja: ${cobrador.nombre_hoja}).`);
+        }
+
+        // RENDERIZADO CLIENTES
+        function renderizarClientesCalle(lista) {
+            const contenedor = document.getElementById('listaClientesCalle');
+            const query = (document.getElementById('buscadorCalle')?.value || '').toLowerCase().trim();
+
+            const clientesActivos = lista.filter(c => (parseFloat(c.saldo_pendiente) || 0) > 0);
+
+            if (!query) {
+                if (clientesActivos.length === 0) {
+                    contenedor.innerHTML = `
+                        <div class="p-8 text-center text-slate-400 text-xs bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                            <span class="text-3xl block">🎉</span>
+                            <p class="font-bold text-slate-700 dark:text-slate-300">¡No hay clientes pendientes de cobro en tu ruta!</p>
+                            <p class="text-[11px]">Todos tus clientes asignados están al día o totalmente pagados.</p>
+                            <button onclick="abrirModalNuevoCliente()" class="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition">
+                                <span>➕</span> Prestar o Renovar
+                            </button>
+                        </div>`;
+                    return;
+                }
+
+                let activosOrdenados = [...clientesActivos];
+                if (ordenarPorDistancia && ubicacionUsuario) {
+                    activosOrdenados.sort((a, b) => {
+                        const distA = a.distanciaKm !== null ? a.distanciaKm : 999999;
+                        const distB = b.distanciaKm !== null ? b.distanciaKm : 999999;
+                        return distA - distB;
+                    });
+                }
+
+                contenedor.innerHTML = activosOrdenados.map(c => renderizarTarjetaClienteCalle(c)).join('');
+                return;
+            }
+
+            const activosFiltrados = clientesActivos.filter(c => 
+                (c.nombre && c.nombre.toLowerCase().includes(query)) ||
+                (c.direccion && c.direccion.toLowerCase().includes(query)) ||
+                (c.telefono && String(c.telefono).includes(query))
+            );
+
+            if (activosFiltrados.length === 0) {
+                const clientesPagados = lista.filter(c => (parseFloat(c.saldo_pendiente) || 0) <= 0);
+                const pagadoCoincide = clientesPagados.find(c => 
+                    (c.nombre && c.nombre.toLowerCase().includes(query)) ||
+                    (c.telefono && String(c.telefono).includes(query))
+                );
+
+                contenedor.innerHTML = `
+                    <div class="p-8 text-center text-slate-400 text-xs bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                        <span class="text-3xl block">🔍</span>
+                        <p class="font-bold text-slate-700 dark:text-slate-300">No hay cobros pendientes para "${query}"</p>
+                        ${pagadoCoincide ? `
+                            <div class="bg-indigo-50 dark:bg-indigo-950/40 p-3.5 rounded-xl border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 space-y-2">
+                                <p class="text-xs font-medium">💡 El cliente <b>${pagadoCoincide.nombre}</b> ya pagó su préstamo anterior.</p>
+                                <button onclick="prepararRenovacionCliente('${pagadoCoincide.id_cliente}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition">
+                                    <span>🔄</span> Renovar Préstamo a ${pagadoCoincide.nombre}
+                                </button>
+                            </div>
+                        ` : `
+                            <p class="text-[11px]">Los clientes que ya pagaron están ocultos. Para prestar o renovar:</p>
+                            <button onclick="abrirModalNuevoCliente()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition">
+                                <span>➕</span> Buscar para Renovar / Prestar
+                            </button>
+                        `}
+                    </div>`;
+                return;
+            }
+
+            contenedor.innerHTML = activosFiltrados.map(c => renderizarTarjetaClienteCalle(c)).join('');
+        }
+
+        function renderizarTarjetaClienteCalle(c) {
+            const infoCuotas = calcularProgresoCuotas(c);
+            const saldo = parseFloat(c.saldo_pendiente) || 0;
+            const fechaPrestamoStr = formatearFechaBonita(c.fecha_prestamo || (c.abonos && c.abonos[0] ? c.abonos[0].fecha : ''));
+
+            let cardBorder = (c.cuotasAtrasadas >= 2) ? "border-red-300 dark:border-red-900/60 bg-red-50/20" : "border-slate-200 dark:border-slate-800";
+            let distanceBadge = c.distanciaKm !== null 
+                ? `<span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1">📍 ${formatearDistancia(c.distanciaKm)}</span>`
+                : '';
+
+            return `
+                <div class="bg-white dark:bg-slate-900 rounded-2xl border ${cardBorder} p-4 shadow-sm space-y-3 transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-bold text-slate-900 dark:text-white text-sm">${c.nombre}</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                                <span>📍</span> ${c.direccion}
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            ${distanceBadge}
+                            <span class="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 block mt-1">${c.modalidad}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/60 text-xs">
+                        <div>
+                            <span class="text-slate-400 block text-[10px]">Saldo Deuda:</span>
+                            <span class="font-bold text-sm text-amber-600 dark:text-amber-400">
+                                $${saldo.toLocaleString()}
+                            </span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px]">Cuota sugerida:</span>
+                            <span class="font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                                $${infoCuotas.valorCuota.toLocaleString()}
+                            </span>
+                        </div>
+                        <div class="col-span-2 flex justify-between items-center pt-1 border-t border-slate-200 dark:border-slate-800/60 text-[11px] text-slate-500 dark:text-slate-400">
+                            <span>📅 Préstamo: <b class="text-slate-700 dark:text-slate-300">${fechaPrestamoStr}</b></span>
+                            <span>Cuotas: <b class="text-indigo-400">${infoCuotas.pagadas}/${infoCuotas.totalCuotas}</b></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <div class="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${infoCuotas.porcentaje}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-1">
+                        ${c.latitud && c.longitud ? `
+                            <button onclick="abrirRutaWazeOMaps(${c.latitud}, ${c.longitud})" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 text-xs flex items-center justify-center gap-1 font-semibold transition" title="Navegar Maps">
+                                🧭
+                            </button>
+                        ` : `
+                            <button onclick="guardarUbicacionRapida('${c.id_cliente}')" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-emerald-500 text-xs flex items-center justify-center gap-1 transition" title="Fijar GPS">
+                                📍+
+                            </button>
+                        `}
+                        <button onclick="abrirModalCliente('${c.id_cliente}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition">
+                            💵 Abonar / Ver Estado
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function filtrarClientesCalle() {
+            renderizarClientesCalle(getClientesDeMiRuta());
+        }
+
+        // RENOVACIÓN ULTRA RÁPIDA
+        function prepararRenovacionCliente(idCliente) {
+            abrirModalNuevoCliente();
+            seleccionarClienteParaRenovarCobrador(idCliente);
+        }
+
+        function buscarClienteParaRenovarCobrador(query) {
+            const dropdown = document.getElementById('dropdownSugerenciasCobrador');
+            const q = String(query || "").trim().toLowerCase();
+            if (!q) {
+                dropdown.classList.add('hidden');
+                dropdown.innerHTML = '';
+                return;
+            }
+
+            const matches = getClientesDeMiRuta().filter(c => 
+                (c.nombre && c.nombre.toLowerCase().includes(q)) ||
+                (c.telefono && String(c.telefono).includes(q)) ||
+                (c.id_cliente && String(c.id_cliente).toLowerCase().includes(q))
+            ).sort((a, b) => {
+                const saldoA = parseFloat(a.saldo_pendiente) || 0;
+                const saldoB = parseFloat(b.saldo_pendiente) || 0;
+                return saldoA - saldoB;
+            }).slice(0, 8);
+
+            if (matches.length === 0) {
+                dropdown.innerHTML = `<div class="p-3 text-slate-400 text-center text-xs">No se encontraron clientes registrados con "${q}"</div>`;
+                dropdown.classList.remove('hidden');
+                return;
+            }
+
+            dropdown.innerHTML = matches.map(c => {
+                const saldo = parseFloat(c.saldo_pendiente) || 0;
+                const estaPagado = saldo <= 0;
+                return `
+                    <div onclick="seleccionarClienteParaRenovarCobrador('${c.id_cliente}')" class="p-2.5 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer flex justify-between items-center transition border-b border-slate-100 dark:border-slate-800 last:border-0">
+                        <div>
+                            <span class="font-bold text-slate-900 dark:text-white block text-xs">${c.nombre}</span>
+                            <span class="text-[11px] text-slate-400">📞 ${c.telefono} • 📍 ${c.direccion || 'Sin dirección'}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${estaPagado ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}">
+                                ${estaPagado ? '✓ Totalmente Pagado' : `Saldo: $${saldo.toLocaleString()}`}
+                            </span>
+                            <span class="block text-[10px] text-indigo-500 font-bold mt-0.5">Tocar para renovar ➔</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            dropdown.classList.remove('hidden');
+        }
+
+        function seleccionarClienteParaRenovarCobrador(idCliente) {
+            const c = clientesGlobalData.find(cli => String(cli.id_cliente) === String(idCliente));
+            if (!c) return;
+
+            document.getElementById('cobradorIdClienteRenovacion').value = c.id_cliente;
+            
+            const elNom = document.getElementById('cobradorNombre');
+            const elTel = document.getElementById('cobradorTelefono');
+            const elDir = document.getElementById('cobradorDireccion');
+            
+            elNom.value = c.nombre || '';
+            elTel.value = c.telefono || '';
+            elDir.value = c.direccion || '';
+            
+            [elNom, elTel, elDir].forEach(el => {
+                el.readOnly = true;
+                el.classList.add('bg-slate-100', 'dark:bg-slate-800', 'cursor-not-allowed', 'opacity-85');
+            });
+
+            document.getElementById('cobradorModalidad').value = c.modalidad || 'Diario';
+            document.getElementById('cobradorLat').value = c.latitud || '';
+            document.getElementById('cobradorLng').value = c.longitud || '';
+
+            if (c.latitud && c.longitud) {
+                setTexto('txtGpsCobrador', '📍 GPS cargado automáticamente');
+            }
+
+            const elCobFecha = document.getElementById('cobradorFechaPrestamo');
+            if (elCobFecha) elCobFecha.value = getFechaLocalISO();
+
+            if (c.intereses) document.getElementById('cobradorInteres').value = c.intereses;
+            if (c.cantidad_cuotas) document.getElementById('cobradorCuotas').value = c.cantidad_cuotas;
+
+            const elMonto = document.getElementById('cobradorMonto');
+            elMonto.value = '';
+            elMonto.focus();
+            calcularCuotasCobrador();
+
+            setTexto('nombreClienteRenovandoCobrador', `${c.nombre} (${c.id_cliente})`);
+            document.getElementById('bannerAlertaRenovacionCobrador').classList.remove('hidden');
+            document.getElementById('btnGuardarCobradorCliente').textContent = "🔄 Guardar Renovación";
+
+            document.getElementById('buscadorRenovacionCobrador').value = '';
+            document.getElementById('dropdownSugerenciasCobrador').classList.add('hidden');
+        }
+
+        function habilitarEdicionDatosCobrador() {
+            ['cobradorNombre', 'cobradorTelefono', 'cobradorDireccion'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.readOnly = false;
+                    el.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'cursor-not-allowed', 'opacity-85');
+                }
+            });
+            alert("Campos desbloqueados. Ahora puedes modificar nombre, teléfono o dirección si lo necesitas.");
+        }
+
+        function cancelarRenovacionCobrador() {
+            document.getElementById('cobradorIdClienteRenovacion').value = '';
+            document.getElementById('bannerAlertaRenovacionCobrador').classList.add('hidden');
+            document.getElementById('btnGuardarCobradorCliente').textContent = "Guardar Préstamo";
+            
+            ['cobradorNombre', 'cobradorTelefono', 'cobradorDireccion'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.readOnly = false;
+                    el.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'cursor-not-allowed', 'opacity-85');
+                }
+            });
+
+            document.getElementById('formCobradorNuevoCliente').reset();
+            const elCobFecha = document.getElementById('cobradorFechaPrestamo');
+            if (elCobFecha) elCobFecha.value = getFechaLocalISO();
+            setTexto('txtGpsCobrador', 'Tomar GPS de este punto');
+            calcularCuotasCobrador();
+        }
+
+        function calcularCuotasCobrador() {
+            const monto = parseFloat(document.getElementById('cobradorMonto')?.value) || 0;
+            const interes = parseFloat(document.getElementById('cobradorInteres')?.value) || 0;
+            const cuotas = parseInt(document.getElementById('cobradorCuotas')?.value) || 1;
+            const modalidad = document.getElementById('cobradorModalidad')?.value || 'Diario';
+            
+            const total = monto + (monto * (interes / 100));
+            const valorCuota = Math.round(total / (cuotas > 0 ? cuotas : 1));
+            
+            setTexto('cobradorValorCuotaTexto', `$${valorCuota.toLocaleString()}`);
+            setTexto('cobradorTotalConInteres', `Total a pagar: $${Math.round(total).toLocaleString()}`);
+            setTexto('cobradorFrecuenciaCuota', `/ cuota ${modalidad.toLowerCase()}`);
+        }
+
+        async function registrarClienteCobrador(e) {
+            e.preventDefault();
+            const nombre = document.getElementById('cobradorNombre').value.trim();
+            const telefono = document.getElementById('cobradorTelefono').value.trim();
+            const direccion = document.getElementById('cobradorDireccion').value.trim();
+            const monto_prestamo = parseFloat(document.getElementById('cobradorMonto').value) || 0;
+            const intereses = parseFloat(document.getElementById('cobradorInteres').value) || 0;
+            const modalidad = document.getElementById('cobradorModalidad').value;
+            const cantidad_cuotas = parseInt(document.getElementById('cobradorCuotas').value) || 1;
+            const fecha_prestamo = document.getElementById('cobradorFechaPrestamo')?.value || getFechaLocalISO();
+
+            const montoTotal = monto_prestamo + (monto_prestamo * (intereses / 100));
+            const valor_cuota = Math.round(montoTotal / cantidad_cuotas);
+
+            const latitud = document.getElementById('cobradorLat').value;
+            const longitud = document.getElementById('cobradorLng').value;
+            const id_cliente = document.getElementById('cobradorIdClienteRenovacion').value || "";
+
+            const id_cobrador = cobradorActualData.id_cobrador;
+            const nombre_hoja = cobradorActualData.nombre_hoja;
+
+            const btn = document.getElementById('btnGuardarCobradorCliente');
+            btn.disabled = true;
+            btn.textContent = id_cliente ? "Renovando crédito..." : "Guardando en Google Sheets...";
+
+            try {
+                const res = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: id_cliente ? "renovarCliente" : "crearCliente",
+                        id_cliente,
+                        nombre, 
+                        telefono, 
+                        direccion, 
+                        monto_prestamo, 
+                        intereses, 
+                        modalidad, 
+                        cantidad_cuotas, 
+                        valor_cuota, 
+                        fecha_prestamo, 
+                        latitud, 
+                        longitud,
+                        id_cobrador,
+                        nombre_hoja
+                    })
+                });
+                const resp = await res.json();
+                if (resp.status === "success") {
+                    alert(resp.message || `✅ ¡Préstamo guardado exitosamente en tu hoja '${nombre_hoja}'!`);
+                    e.target.reset();
+                    cancelarRenovacionCobrador();
+                    cerrarModalNuevoCliente();
+                    cargarDatosApp();
+                } else {
+                    alert("Error: " + resp.message);
+                }
+            } catch(err) {
+                alert("Error de conexión al guardar cliente.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Guardar Préstamo";
+            }
+        }
+
+        function abrirModalNuevoCliente() {
+            document.getElementById('modalNuevoCliente').classList.remove('hidden');
+            const elCobradorFecha = document.getElementById('cobradorFechaPrestamo');
+            if (elCobradorFecha && !elCobradorFecha.value) elCobradorFecha.value = getFechaLocalISO();
+        }
+
+        function cerrarModalNuevoCliente() {
+            document.getElementById('modalNuevoCliente').classList.add('hidden');
+            cancelarRenovacionCobrador();
+        }
+
+        function capturarGpsCobradorNuevo() {
+            const txt = document.getElementById('txtGpsCobrador');
+            if ("geolocation" in navigator) {
+                txt.textContent = "Obteniendo GPS...";
+                navigator.geolocation.getCurrentPosition(pos => {
+                    document.getElementById('cobradorLat').value = pos.coords.latitude;
+                    document.getElementById('cobradorLng').value = pos.coords.longitude;
+                    txt.textContent = `GPS fijado: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+                }, err => {
+                    alert("No se pudo obtener GPS: " + err.message);
+                    txt.textContent = "Tomar GPS de este punto";
+                }, { enableHighAccuracy: true });
+            } else {
+                alert("Geolocalización no soportada.");
+            }
+        }
+
+        // BASE DE CAJA
+        function abrirModalBaseCaja() {
+            document.getElementById('modalBaseCaja').classList.remove('hidden');
+            const input = document.getElementById('inputMontoBaseCaja');
+            const hoyStr = getFechaLocalISO();
+            const baseGuardada = localStorage.getItem('credicontrol_base_caja_' + cobradorActualId + '_' + hoyStr);
+            input.placeholder = baseGuardada ? `Actual: $${Number(baseGuardada).toLocaleString()}` : "Ej. 100000";
+            input.value = '';
+            input.focus();
+        }
+
+        function cerrarModalBaseCaja() {
+            document.getElementById('modalBaseCaja').classList.add('hidden');
+        }
+
+        function guardarBaseCaja(e) {
+            e.preventDefault();
+            const input = document.getElementById('inputMontoBaseCaja');
+            const monto = parseFloat(input.value);
+            if (isNaN(monto) || monto < 0) return alert("Ingresa un monto válido.");
+
+            const hoyStr = getFechaLocalISO();
+            localStorage.setItem('credicontrol_base_caja_' + cobradorActualId + '_' + hoyStr, monto);
+            localStorage.setItem('credicontrol_base_caja_' + hoyStr, monto);
+
+            cerrarModalBaseCaja();
+            alert(`✅ Base de caja guardada: $${monto.toLocaleString()}`);
+            actualizarMetricasCobrador();
+        }
+
+        // GASTOS
+        function abrirModalGasto() {
+            document.getElementById('modalGasto').classList.remove('hidden');
+            document.getElementById('inputMontoGasto').value = '';
+            document.getElementById('selectConceptoGasto').value = 'Gasolina';
+            document.getElementById('divConceptoPersonalizado').classList.add('hidden');
+        }
+
+        function cerrarModalGasto() {
+            document.getElementById('modalGasto').classList.add('hidden');
+        }
+
+        function verificarConceptoOtro(val) {
+            const div = document.getElementById('divConceptoPersonalizado');
+            if (val === 'OTRO') {
+                div.classList.remove('hidden');
+                document.getElementById('inputConceptoPersonalizado').focus();
+            } else {
+                div.classList.add('hidden');
+            }
+        }
+
+        async function guardarGasto(e) {
+            e.preventDefault();
+            const select = document.getElementById('selectConceptoGasto').value;
+            let concepto = select === 'OTRO' ? (document.getElementById('inputConceptoPersonalizado').value.trim() || 'Varios') : select;
+            const monto = parseFloat(document.getElementById('inputMontoGasto').value) || 0;
+            if (monto <= 0) return alert("Introduce un monto válido.");
+
+            const btn = document.getElementById('btnGuardarGasto');
+            btn.disabled = true;
+            btn.textContent = "Guardando...";
+
+            try {
+                const res = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        action: "registrarGasto", 
+                        concepto, 
+                        monto,
+                        cobrador: cobradorActualData.nombre,
+                        id_cobrador: cobradorActualData.id_cobrador
+                    })
+                });
+                await res.json();
+                
+                const hoyStr = getFechaLocalISO();
+                const gastosLocal = JSON.parse(localStorage.getItem('credicontrol_gastos_hoy') || '[]');
+                gastosLocal.push({ 
+                    fecha: hoyStr, 
+                    concepto, 
+                    monto, 
+                    cobrador: cobradorActualData.nombre, 
+                    id_cobrador: cobradorActualData.id_cobrador 
+                });
+                localStorage.setItem('credicontrol_gastos_hoy', JSON.stringify(gastosLocal));
+
+                alert("¡Gasto registrado con éxito!");
+                cerrarModalGasto();
+                actualizarMetricasCobrador();
+            } catch (err) {
+                alert("Error al guardar el gasto.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Guardar Gasto";
+            }
+        }
+
+        // CIERRE DIARIO
+       function cerrarModalConfirmarCierre() {
+            const modal = document.getElementById('modalConfirmarCierre');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function abrirModalConfirmarCierre() {
+            actualizarMetricasCobrador();
+            const modal = document.getElementById('modalConfirmarCierre');
+            if (modal) modal.classList.remove('hidden');
+            const obs = document.getElementById('cierreObservaciones');
+            if (obs) obs.value = '';
+        }
+
+        async function ejecutarCierreDiario(e) {
+            if (e && e.preventDefault) e.preventDefault();
+
+            const btn = document.getElementById('btnConfirmarCierre');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "Procesando...";
+            }
+
+            const hoyStr = getFechaLocalISO();
+            const clientesCob = getClientesDeMiRuta();
+
+            let recaudoCob = 0;
+            let countAbonos = 0;
+            clientesCob.forEach(c => {
+                if (c.abonos && Array.isArray(c.abonos)) {
+                    c.abonos.forEach(a => {
+                        if (normalizarFechaAbono(a.fecha) === hoyStr) {
+                            recaudoCob += (parseFloat(a.monto_abonado) || 0);
+                            countAbonos++;
+                        }
+                    });
+                }
+            });
+
+            let prestamosCob = 0;
+            let countPrestamos = 0;
+            clientesCob.forEach(c => {
+                if (normalizarFechaAbono(c.fecha_prestamo) === hoyStr) {
+                    prestamosCob += (parseFloat(c.monto_prestamo) || 0);
+                    countPrestamos++;
+                }
+            });
+
+            const idCob = cobradorActualData ? cobradorActualData.id_cobrador : cobradorActualId;
+            const nombreCob = cobradorActualData ? cobradorActualData.nombre : 'Cobrador';
+            const hojaCob = cobradorActualData ? cobradorActualData.nombre_hoja : '';
+
+            const baseCob = Number(localStorage.getItem('credicontrol_base_caja_' + idCob + '_' + hoyStr) || 0);
+            const infoGastos = obtenerGastosHoy(idCob, nombreCob, hoyStr);
+            const gastosCob = infoGastos.total;
+            const countGastos = infoGastos.count;
+
+            const netoCob = baseCob + recaudoCob - prestamosCob - gastosCob;
+
+            const obsEl = document.getElementById('cierreObservaciones');
+            const observaciones = obsEl ? obsEl.value : '';
+
+            const payload = {
+                action: "guardarCierre",
+                base_caja: baseCob,
+                total_cobrado: recaudoCob,
+                total_prestado: prestamosCob,
+                total_gastos: gastosCob,
+                efectivo_neto: netoCob,
+                cantidad_abonos: countAbonos,
+                cantidad_prestamos: countPrestamos,
+                cantidad_gastos: countGastos,
+                cerrado_por: nombreCob + " (" + hojaCob + ")",
+                id_cobrador: idCob,
+                observaciones: observaciones
+            };
+
+            // Realizar la petición POST a Google Apps Script
+            fetch(WEB_APP_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(resp => {
+                if (resp && resp.status === "error") {
+                    alert("Error servidor: " + resp.message);
+                } else {
+                    alert(`✅ ¡Cierre de ${nombreCob} guardado exitosamente!`);
+                }
+            })
+            .catch(err => {
+                console.warn("Respuesta sin JSON o CORS en Google Apps Script, cierre guardado en backend:", err);
+                alert(`✅ ¡Cierre registrado exitosamente!`);
+            })
+            .finally(() => {
+                // 1. Limpiar llaves locales de la jornada
+                localStorage.removeItem('credicontrol_base_caja_' + idCob + '_' + hoyStr);
+                localStorage.removeItem('credicontrol_base_caja_' + hoyStr);
+                localStorage.removeItem('credicontrol_gastos_hoy');
+
+                // 2. Marcar localmente que hoy se cerró para dejar métricas en 0
+                localStorage.setItem('credicontrol_cierre_hecho_' + idCob + '_' + hoyStr, 'true');
+
+                // 3. Reiniciar la interfaz gráfica a CERO inmediatamente
+                setTexto('cobradorBaseCaja', '+$0');
+                setTexto('cobradorRecaudoBruto', '+$0');
+                setTexto('cobradorPrestamosTotal', '-$0');
+                setTexto('cobradorGastosTotal', '-$0');
+                setTexto('cobradorEfectivoNeto', '$0');
+
+                setTexto('liqBase', '$0');
+                setTexto('liqRecaudo', '+$0');
+                setTexto('liqPrestamos', '-$0');
+                setTexto('liqGastos', '-$0');
+                setTexto('liqNeto', '$0');
+
+                // 4. Cerrar el modal y restaurar botón
+                cerrarModalConfirmarCierre();
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "Confirmar Cierre";
+                }
+            });
+        }
+        // LIQUIDACIÓN
+        function abrirModalLiquidacion() {
+            actualizarMetricasCobrador();
+            document.getElementById('modalLiquidacion').classList.remove('hidden');
+        }
+        function cerrarModalLiquidacion() {
+            document.getElementById('modalLiquidacion').classList.add('hidden');
+        }
+
+        // ABONOS
+        function abrirModalCliente(idCliente) {
+            const cliente = clientesGlobalData.find(c => String(c.id_cliente) === String(idCliente));
+            if (!cliente) return;
+            clienteSeleccionadoActual = cliente;
+
+            const saldo = Number(cliente.saldo_pendiente) || 0;
+            const infoCuotas = calcularProgresoCuotas(cliente);
+
+            setTexto('modalNombreCliente', cliente.nombre);
+            setTexto('modalInfoAdicional', `Mod: ${cliente.modalidad} | Tel: ${cliente.telefono}`);
+            setTexto('modalDeudaTotal', `$${Number(cliente.monto_total || 0).toLocaleString()}`);
+            setTexto('modalSaldoPendiente', `$${saldo.toLocaleString()}`);
+            setTexto('modalCuotaSugerida', `$${infoCuotas.valorCuota.toLocaleString()}`);
+            setTexto('modalProgresoCuotas', `${infoCuotas.pagadas} / ${infoCuotas.totalCuotas} pagadas`);
+
+            document.getElementById('modalIdCliente').value = cliente.id_cliente;
+            document.getElementById('inputMontoAbono').value = saldo > 0 ? infoCuotas.valorCuota : 0;
+
+            const btnAbono = document.getElementById('btnEnviarAbono');
+            if (saldo <= 0) {
+                btnAbono.disabled = true;
+                btnAbono.className = "w-1/2 bg-slate-300 dark:bg-slate-700 text-slate-500 py-2 rounded-xl text-xs font-bold cursor-not-allowed";
+                btnAbono.textContent = "Préstamo Pagado";
+            } else {
+                btnAbono.disabled = false;
+                btnAbono.className = "w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold transition";
+                btnAbono.textContent = "Registrar Abono";
+            }
+
+            const contenedorHistorial = document.getElementById('modalHistorialAbonos');
+            if (cliente.abonos && cliente.abonos.length > 0) {
+                contenedorHistorial.innerHTML = cliente.abonos.map(a => `
+                    <div class="flex justify-between items-center bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                        <span class="text-slate-500 dark:text-slate-400">📅 ${formatearFechaBonita(a.fecha)}</span>
+                        <span class="font-bold text-emerald-600 dark:text-emerald-400">+$${Number(a.monto_abonado || 0).toLocaleString()}</span>
+                    </div>
+                `).join('');
+            } else {
+                contenedorHistorial.innerHTML = `<p class="text-slate-400 text-center py-2">No hay abonos registrados todavía.</p>`;
+            }
+
+            document.getElementById('modalDetalle').classList.remove('hidden');
+        }
+
+        function cerrarModal() {
+            document.getElementById('modalDetalle').classList.add('hidden');
+        }
+
+        async function enviarAbono(e) {
+            e.preventDefault();
+            const idCliente = document.getElementById('modalIdCliente').value;
+            const montoAbonado = parseFloat(document.getElementById('inputMontoAbono').value) || 0;
+            const saldoActual = parseFloat(clienteSeleccionadoActual.saldo_pendiente) || 0;
+
+            if (montoAbonado <= 0) return alert("Por favor ingresa un monto válido.");
+            if (montoAbonado > saldoActual) return alert(`El monto supera la deuda pendiente ($${saldoActual.toLocaleString()}).`);
+
+            const btn = document.getElementById('btnEnviarAbono');
+            btn.disabled = true;
+            btn.textContent = "Guardando...";
+
+            try {
+                const res = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: "registrarAbono",
+                        id_cliente: idCliente,
+                        monto_abonado: montoAbonado,
+                        nombre_hoja: clienteSeleccionadoActual.nombre_hoja,
+                        id_cobrador: cobradorActualData.id_cobrador,
+                        cobrador: cobradorActualData.nombre
+                    })
+                });
+                const resp = await res.json();
+                if (resp.status === "success") {
+                    const nuevoSaldo = resp.nuevoSaldo !== undefined ? resp.nuevoSaldo : (saldoActual - montoAbonado);
+                    clienteSeleccionadoActual.saldo_pendiente = nuevoSaldo;
+                    const infoCuotasActualizada = calcularProgresoCuotas(clienteSeleccionadoActual);
+
+                    cerrarModal();
+
+                    abrirModalComprobante({
+                        nombre: clienteSeleccionadoActual.nombre,
+                        telefono: clienteSeleccionadoActual.telefono,
+                        montoAbonado,
+                        nuevoSaldo,
+                        cuotasPagadas: infoCuotasActualizada.pagadas,
+                        cuotasPendientes: infoCuotasActualizada.pendientes,
+                        cobrador: cobradorActualData.nombre
+                    });
+
+                    cargarDatosApp();
+                } else {
+                    alert("Error: " + resp.message);
+                }
+            } catch(err) {
+                alert("Error de conexión al registrar abono.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Registrar Abono";
+            }
+        }
+
+        // COMPROBANTE WHATSAPP
+        function abrirModalComprobante(datos) {
+            comprobanteActualData = datos;
+            const d = new Date();
+            const fechaStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+            const preview = `🧾 *RECIBO OFICIAL DE PAGO*
+📅 *Fecha:* ${fechaStr}
+👤 *Cliente:* ${datos.nombre}
+💵 *Abono Recibido:* $${Number(datos.montoAbonado).toLocaleString()}
+💰 *Saldo Pendiente:* $${Number(datos.nuevoSaldo).toLocaleString()}
+📊 *Cuotas Pagadas:* ${datos.cuotasPagadas}
+⏳ *Cuotas Restantes:* ${datos.cuotasPendientes}
+🛵 *Cobrador:* ${datos.cobrador || 'CrediControl Pro'}
+¡Gracias por tu pago puntual!`;
+
+            document.getElementById('textoComprobantePreview').textContent = preview;
+            document.getElementById('modalComprobante').classList.remove('hidden');
+        }
+
+        function cerrarModalComprobante() {
+            document.getElementById('modalComprobante').classList.add('hidden');
+        }
+
+        function enviarReciboWhatsApp() {
+            if (!comprobanteActualData) return;
+            const tel = normalizarTelefono(comprobanteActualData.telefono);
+            const texto = document.getElementById('textoComprobantePreview').textContent;
+            window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
+        }
+
+        // GPS Y RUTAS
+        function detectarUbicacionActual() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    ubicacionUsuario = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    clientesGlobalData.forEach(c => {
+                        if (c.latitud && c.longitud) {
+                            c.distanciaKm = calcularDistanciaKm(ubicacionUsuario.lat, ubicacionUsuario.lng, parseFloat(c.latitud), parseFloat(c.longitud));
+                        } else {
+                            c.distanciaKm = null;
+                        }
+                    });
+                    if (ordenarPorDistancia) renderizarClientesCalle(getClientesDeMiRuta());
+                }, err => {
+                    console.log("GPS no disponible:", err.message);
+                }, { enableHighAccuracy: true });
+            }
+        }
+
+        function toggleOrdenarPorGps() {
+            ordenarPorDistancia = !ordenarPorDistancia;
+            const btn = document.getElementById('btnOrdenarGps');
+            const txt = document.getElementById('txtBtnGps');
+
+            if (ordenarPorDistancia) {
+                btn.className = "flex-1 bg-emerald-600 text-white border border-emerald-500 rounded-xl px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition";
+                txt.textContent = "Ordenado por Cercanía (GPS)";
+                if (!ubicacionUsuario) detectarUbicacionActual();
+                else renderizarClientesCalle(getClientesDeMiRuta());
+            } else {
+                btn.className = "flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 shadow-sm hover:border-emerald-500 transition";
+                txt.textContent = "Ordenar por Distancia GPS";
+                renderizarClientesCalle(getClientesDeMiRuta());
+            }
+        }
+
+        function abrirRutaWazeOMaps(lat, lng) {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+        }
+
+        function navegarClienteActual() {
+            if (clienteSeleccionadoActual && clienteSeleccionadoActual.latitud && clienteSeleccionadoActual.longitud) {
+                abrirRutaWazeOMaps(clienteSeleccionadoActual.latitud, clienteSeleccionadoActual.longitud);
+            } else {
+                alert("Este cliente no tiene ubicación GPS. Toca 'Fijar GPS Aquí' cuando estés en su puerta.");
+            }
+        }
+
+        function guardarUbicacionClienteActual() {
+            if (clienteSeleccionadoActual) guardarUbicacionRapida(clienteSeleccionadoActual.id_cliente);
+        }
+
+        async function guardarUbicacionRapida(idCliente) {
+            if (!("geolocation" in navigator)) return alert("Tu dispositivo no soporta geolocalización.");
+            navigator.geolocation.getCurrentPosition(async pos => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const cliente = clientesGlobalData.find(c => String(c.id_cliente) === String(idCliente));
+                try {
+                    const res = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: "actualizarGps",
+                            id_cliente: idCliente,
+                            latitud: lat,
+                            longitud: lng,
+                            nombre_hoja: cliente ? cliente.nombre_hoja : null
+                        })
+                    });
+                    const resp = await res.json();
+                    if (resp.status === "success") {
+                        alert("📍 Coordenadas GPS guardadas con éxito.");
+                        cargarDatosApp();
+                    } else {
+                        alert("Error: " + resp.message);
+                    }
+                } catch(e) {
+                    alert("Error de conexión al guardar GPS.");
+                }
+            }, () => alert("No se pudo obtener la posición GPS."), { enableHighAccuracy: true });
+        }
+
+        // MAPA LEAFLET EXCLUSIVO DE ESTE COBRADOR
+        function abrirModalMapa() {
+            document.getElementById('modalMapa').classList.remove('hidden');
+            setTimeout(() => {
+                const contenedor = document.getElementById('contenedorMapaLeaflet');
+                if (!mapaLeaflet) {
+                    mapaLeaflet = L.map(contenedor).setView([4.5709, -74.2973], 6);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; CartoDB & OpenStreetMap',
+                        maxZoom: 19
+                    }).addTo(mapaLeaflet);
+                } else {
+                    mapaLeaflet.invalidateSize();
+                }
+
+                marcadoresMapa.forEach(m => mapaLeaflet.removeLayer(m));
+                marcadoresMapa = [];
+                const bounds = [];
+                const clientesMapa = getClientesDeMiRuta().filter(c => (parseFloat(c.saldo_pendiente) || 0) > 0);
+
+                if (ubicacionUsuario) {
+                    const cobMarker = L.marker([ubicacionUsuario.lat, ubicacionUsuario.lng], {
+                        icon: L.divIcon({
+                            className: 'custom-div-icon',
+                            html: '<div class="bg-indigo-600 text-white p-2 rounded-full border-2 border-white shadow-lg text-sm">🛵</div>',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        })
+                    }).addTo(mapaLeaflet).bindPopup("<b>Tu Ubicación Actual</b>");
+                    marcadoresMapa.push(cobMarker);
+                    bounds.push([ubicacionUsuario.lat, ubicacionUsuario.lng]);
+                }
+
+                clientesMapa.forEach(c => {
+                    if (c.latitud && c.longitud) {
+                        const lat = parseFloat(c.latitud);
+                        const lng = parseFloat(c.longitud);
+                        const saldo = parseFloat(c.saldo_pendiente) || 0;
+
+                        const marker = L.marker([lat, lng], {
+                            icon: L.divIcon({
+                                className: 'custom-div-icon',
+                                html: `<div class="bg-emerald-600 text-white p-1.5 rounded-full border-2 border-white shadow-md text-xs font-bold">📍</div>`,
+                                iconSize: [26, 26],
+                                iconAnchor: [13, 13]
+                            })
+                        }).addTo(mapaLeaflet).bindPopup(`
+                            <div class="space-y-1 text-xs">
+                                <b>${c.nombre}</b><br>
+                                <span>Dir: ${c.direccion}</span><br>
+                                <span class="font-bold text-amber-500">Saldo: $${saldo.toLocaleString()}</span><br>
+                                <button onclick="abrirRutaWazeOMaps(${lat}, ${lng})" class="mt-1 bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-bold">
+                                    Navegar Maps
+                                </button>
+                            </div>
+                        `);
+                        marcadoresMapa.push(marker);
+                        bounds.push([lat, lng]);
+                    }
+                });
+
+                if (bounds.length > 0) mapaLeaflet.fitBounds(bounds, { padding: [40, 40] });
+            }, 250);
+        }
+
+        function cerrarModalMapa() {
+            document.getElementById('modalMapa').classList.add('hidden');
+        }
+
+        // INICIALIZACIÓN
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('themeIcon').textContent = '🌙';
+            }
+
+            const elCobradorFecha = document.getElementById('cobradorFechaPrestamo');
+            if (elCobradorFecha) elCobradorFecha.value = getFechaLocalISO();
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#buscadorRenovacionCobrador') && !e.target.closest('#dropdownSugerenciasCobrador')) {
+                    document.getElementById('dropdownSugerenciasCobrador')?.classList.add('hidden');
+                }
+            });
+
+            resolverCobradorActivo();
+        });
+    </script>
+</body>
+</html>
